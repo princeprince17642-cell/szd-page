@@ -10,7 +10,7 @@ const ACCESS_TOKEN = "EAAW66bFklZB0BSxA11E6YMDONubXOdQkx0YItqvzeaeUbd9P3mZBBFFTE
 const CHANNEL_LINK = "https://t.me/+iChxoT_HOS41MmFl";
 
 app.get('/', (req, res) => {
-    res.send("Client Bot & CAPI Tracking Server is Running!");
+    res.send("Client Bot & CAPI Tracking Server is Running Perfectly!");
 });
 
 // Telegram Webhook Endpoint
@@ -18,7 +18,7 @@ app.post('/api/webhook', async (req, res) => {
     try {
         const update = req.body;
         
-        // Handle /start command
+        // Handle /start command from user
         if (update.message && update.message.text && update.message.text.startsWith('/start')) {
             const chatId = update.message.chat.id;
             const payload = {
@@ -38,7 +38,7 @@ app.post('/api/webhook', async (req, res) => {
             });
         }
 
-        // Handle Chat Join Request (Real subscriber tracking)
+        // Handle Chat Join Request (Jab user request bhejega, tab Subscribe event fire hoga)
         const event = update.chat_join_request;
         if (event) {
             const userId = event.from.id;
@@ -73,12 +73,13 @@ app.post('/api/webhook', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
+    
     // Auto set webhook on Railway deployment
     if (process.env.RAILWAY_STATIC_URL) {
         try {
             const webhookUrl = `https://${process.env.RAILWAY_STATIC_URL}/api/webhook`;
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url=${encodeURIComponent(webhookUrl)}`);
-            console.log("Telegram Webhook Automatically Set!");
+            console.log("Telegram Webhook Automatically Set Successfully!");
         } catch (e) {
             console.error("Webhook setup failed:", e);
         }
