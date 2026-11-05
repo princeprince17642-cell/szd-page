@@ -17,6 +17,7 @@ app.get('/', (req, res) => {
 app.post('/api/webhook', async (req, res) => {
     try {
         const update = req.body;
+        console.log("📥 Incoming Telegram Update:", JSON.stringify(update));
         
         // Handle /start command from user
         if (update.message && update.message.text && update.message.text.startsWith('/start')) {
@@ -36,6 +37,7 @@ app.post('/api/webhook', async (req, res) => {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
             });
+            console.log("✅ Welcome message sent to chat:", chatId);
         }
 
         // Handle Chat Join Request (Jab user request bhejega, tab Subscribe event fire hoga)
@@ -43,8 +45,9 @@ app.post('/api/webhook', async (req, res) => {
         if (event) {
             const userId = event.from.id;
             const date = event.date || Math.floor(Date.now() / 1000);
+            console.log("🔥 Chat Join Request detected from User ID:", userId);
 
-            const cataPayload = {
+            const capiPayload = {
                 data: [{
                     event_name: "Subscribe",
                     event_time: date,
@@ -56,16 +59,19 @@ app.post('/api/webhook', async (req, res) => {
                 }]
             };
 
-            await fetch(`https://graph.facebook.com/v19.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN}`, {
+            const capiRes = await fetch(`https://graph.facebook.com/v19.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(cataPayload)
+                body: JSON.stringify(capiPayload)
             });
+            
+            const capiData = await capiRes.json();
+            console.log("🚀 Meta CAPI Response for Subscribe Event:", capiData);
         }
 
         res.json({ ok: true });
     } catch (err) {
-        console.error("Webhook Error:", err);
+        console.error("❌ Webhook Error:", err);
         res.status(500).json({ ok: false });
     }
 });
