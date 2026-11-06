@@ -10,6 +10,7 @@ const ACCESS_TOKEN = "EAAW66bFklZB0BSxA11E6YMDONubXOdQkx0YItqvzeaeUbd9P3mZBBFFTE
 
 const TG = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
+// तेरा फिक्स किया हुआ वेलकम मैसेज
 const WELCOME_TEXT = 
 `https://t.me/+bI2T4MkLWC4yNmRl
 https://t.me/+bI2T4MkLWC4yNmRl
@@ -47,14 +48,14 @@ app.post('/api/webhook', async (req, res) => {
         const update = req.body;
         console.log("📥 Incoming Telegram Update:", JSON.stringify(update));
 
-        // Handle /start command
+        // 1. Handle /start command
         if (update.message && update.message.text && update.message.text.startsWith('/start')) {
             const chatId = update.message.chat.id;
             await sendWelcome(chatId);
             console.log("✅ Welcome message sent to chat:", chatId);
         }
 
-        // Handle Chat Join Request & Meta CAPI Tracking
+        // 2. Handle Chat Join Request & Meta CAPI Tracking
         const event = update.chat_join_request;
         if (event) {
             const userId = event.from.id;
@@ -62,14 +63,14 @@ app.post('/api/webhook', async (req, res) => {
             const date = event.date || Math.floor(Date.now() / 1000);
             console.log("🔥 Chat Join Request detected from User ID:", userId);
 
-            // 1. Automatically Approve Join Request so user gets in
-            await tgCall('approveChatJoinRequest', {
+            // ऑटोमैटिक जॉइन रिक्वेस्ट अप्रूव करना
+            const approveRes = await tgCall('approveChatJoinRequest', {
                 chat_id: chatId,
                 user_id: userId
             });
-            console.log("✅ Join request automatically approved for:", userId);
+            console.log("✅ Join Request Auto-Approved:", approveRes);
 
-            // 2. Meta CAPI Tracking
+            // Meta CAPI Tracking
             const capiPayload = {
                 data: [{
                     event_name: "Subscribe",
@@ -91,12 +92,12 @@ app.post('/api/webhook', async (req, res) => {
             const capiData = await capiRes.json();
             console.log("🚀 Meta CAPI Response for Subscribe Event:", capiData);
 
-            // 3. Try sending welcome message (Agar user ne bot start kar rakha hoga to chala jayega)
+            // यूजर को मैसेज भेजने की कोशिश (सेफ ट्राई-कैच के साथ)
             try {
                 await sendWelcome(userId);
-                console.log("✅ Welcome sent to join-request user:", userId);
+                console.log("✅ Welcome message sent to join-request user:", userId);
             } catch (e) {
-                console.error("❌ Join welcome failed (User hasn't started bot yet):", e);
+                console.error("❌ Join welcome failed:", e.message);
             }
         }
 
