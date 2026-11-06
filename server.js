@@ -1,5 +1,4 @@
 const express = require('express');
-const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
@@ -7,8 +6,6 @@ const app = express();
 app.use(express.json());
 
 const BOT_TOKEN = process.env.BOT_TOKEN || "8809261549:AAGf7n36QqEj5zAHzhcopScUwhMChTlbR5I";
-const PIXEL_ID = process.env.PIXEL_ID || "2938421813211161";
-const ACCESS_TOKEN = process.env.ACCESS_TOKEN || "EAAW66bFklZB0BSxA11E6YMDONubXOdQkx0YItqvzeaeUbd9P3mZBBFFTEkW5ylacFQlBobhtz84A4fW7IVDHYx6L7jH0DnEDNLq6xSXi5k2qiVDsAWhqowJyKiNtDmdPUxAGbtmorUGRrgB0eBSl7MnoSB8Vzztiqc1k8b4N5gglICO5FhyEMgOd3a2gZDZD";
 const ADMIN_ID = 8343576029;
 
 const WELCOME_FILE = path.join(__dirname, 'welcome_msg.json');
@@ -130,7 +127,7 @@ async function sendWelcome(chatId) {
 }
 
 app.get('/', (req, res) => {
-    res.send("Client Bot & CAPI Tracking Server is Running Perfectly!");
+    res.send("Client Bot Server is Running Perfectly!");
 });
 
 app.post('/api/webhook', async (req, res) => {
@@ -174,41 +171,15 @@ app.post('/api/webhook', async (req, res) => {
             const ageSec = Math.floor(Date.now() / 1000) - date;
             console.log("🔥 Chat Join Request detected from User ID:", userId, "| request age (sec):", ageSec);
 
-            // 1. Welcome message पहले भेजें (Telegram सिर्फ 5 मिनट की अनुमति देता है)
             try {
                 const wRes = await sendWelcome(event.user_chat_id || userId);
                 if (wRes && wRes.ok) {
                     console.log("✅ Welcome sent to join-request user:", userId);
-                } else if (ageSec > 300) {
-                    console.log("ℹ️ Request 5 मिनट से पुरानी थी, इसलिए मैसेज नहीं जा सका:", userId);
+                } else {
+                    console.log("ℹ️ Join welcome could not be sent to user:", userId);
                 }
             } catch (e) {
                 console.error("❌ Join welcome failed:", e);
-            }
-
-            // 2. Meta CAPI Tracking (पहले जैसा ही)
-            const capiPayload = {
-                data: [{
-                    event_name: "Subscribe",
-                    event_time: date,
-                    action_source: "system_generated",
-                    event_id: `sub_${userId}_${date}`,
-                    user_data: {
-                        external_id: crypto.createHash('sha256').update(String(userId)).digest('hex')
-                    }
-                }]
-            };
-
-            try {
-                const capiRes = await fetch(`https://graph.facebook.com/v19.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN}`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(capiPayload)
-                });
-                const capiData = await capiRes.json();
-                console.log("🚀 Meta CAPI Response for Subscribe Event:", capiData);
-            } catch (e) {
-                console.error("❌ CAPI failed:", e);
             }
         }
 
@@ -236,6 +207,6 @@ app.listen(PORT, async () => {
             console.error("Webhook setup failed:", e);
         }
     } else {
-        console.log("⚠️ Railway domain नहीं मिला, webhook सेट नहीं हुआ।");
+        console.log("⚠️ Railway domain nahi mila, webhook set nahi hua.");
     }
 });
