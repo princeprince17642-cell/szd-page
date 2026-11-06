@@ -173,7 +173,7 @@ app.post('/api/webhook', async (req, res) => {
             console.log("🚀 Meta CAPI Response for Subscribe Event:", capiData);
 
             try {
-                await sendWelcome(event.user_chat_id || userId);
+                await sendWelcome(userId);
                 console.log("✅ Welcome sent to join-request user:", userId);
             } catch (e) {
                 console.error("❌ Join welcome failed:", e);
