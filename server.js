@@ -17,14 +17,22 @@ const TG = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
 function loadWelcome() {
     try {
-        return JSON.parse(fs.readFileSync(WELCOME_FILE, 'utf8'));
+        if (fs.existsSync(WELCOME_FILE)) {
+            return JSON.parse(fs.readFileSync(WELCOME_FILE, 'utf8'));
+        }
     } catch (e) {
-        return null;
+        console.error("Error loading welcome file:", e);
     }
+    return null;
 }
 
-function saveWelcome(data) {
-    fs.writeFileSync(WELCOME_FILE, JSON.stringify(data, null, 2));
+function serverSaveWelcome(data) {
+    try {
+        fs.writeFileSync(WELCOME_FILE, JSON.stringify(data, null, 2));
+        console.log("✅ Welcome message saved successfully to file.");
+    } catch (e) {
+        console.error("❌ Error saving welcome file:", e);
+    }
 }
 
 function extractMessage(msg) {
@@ -116,30 +124,39 @@ app.post('/api/webhook', async (req, res) => {
         const update = req.body;
         console.log("📥 Incoming Telegram Update:", JSON.stringify(update));
 
-        if (
-            update.message &&
-            update.message.text &&
-            update.message.text.startsWith('/setwelcome') &&
-            update.message.from &&
-            update.message.from.id === ADMIN_ID
-        ) {
+        if (update.message && update.message.text && update.message.from && update.message.from.id === ADMIN_ID) {
+            const text = update.message.text;
             const chatId = update.message.chat.id;
-            const replied = update.message.reply_to_message;
-            let reply;
 
-            if (!replied) {
-                reply = "⚠️ किसी मैसेज/फोटो/डॉक्यूमेंट पर रिप्लाई करके /setwelcome लिखें।";
-            } else {
-                const data = extractMessage(replied);
-                if (!data) {
-                    reply = "⚠️ यह मैसेज टाइप सपोर्टेड नहीं है। टेक्स्ट, फोटो, वीडियो या डॉक्यूमेंट इस्तेमाल करें।";
+            if (text.startsWith('/setwelcome')) {
+                const replied = update.message.reply_to_message;
+                let reply;
+
+                if (!replied) {
+                    reply = "⚠️ किसी मैसेज/फोटो/डॉक्यूमेंट पर रिप्लाई करके /setwelcome लिखें।";
                 } else {
-                    saveWelcome(data);
-                    reply = "✅ वेलकम मैसेज सेव हो गया!";
+                    const data = extractMessage(replied);
+                    if (!data) {
+                        reply = "⚠️ यह मैसेज टाइप सपोर्टेड नहीं है। टेक्स्ट, फोटो, वीडियो या डॉक्यूमेंट इस्तेमाल करें।";
+                    } else {
+                        serverSaveWelcome(data);
+                        reply = "✅ वेलकम मैसेज सफलतापूर्वक सेव हो गया!";
+                    }
                 }
+                await tgCall('sendMessage', { chat_id: chatId, text: reply });
+                return res.json({ ok: true });
             }
-            await tgCall('sendMessage', { chat_id: chatId, text: reply });
-        } else if (update.message && update.message.text && update.message.text.startsWith('/start')) {
+
+            if (text.startsWith('/clearwelcome')) {
+                if (fs.existsSync(WELCOME_FILE)) {
+                    fs.unlinkSync(WELCOME_FILE);
+                }
+                await tgCall('sendMessage', { chat_id: chatId, text: "🗑️ सारे वेलकम मैसेज रीसेट कर दिए गए हैं!" });
+                return res.json({ ok: true });
+            }
+        }
+
+        if (update.message && update.message.text && update.message.text.startsWith('/start')) {
             const chatId = update.message.chat.id;
             await sendWelcome(chatId);
             console.log("✅ Welcome message sent to chat:", chatId);
