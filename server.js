@@ -9,10 +9,7 @@ app.use(express.json());
 const BOT_TOKEN = "8809261549:AAGf7n36QqEj5zAHzhcopScUwhMChTlbR5I";
 const PIXEL_ID = "2938421813211161";
 const ACCESS_TOKEN = "EAAW66bFklZB0BSxA11E6YMDONubXOdQkx0YItqvzeaeUbd9P3mZBBFFTEkW5ylacFQlBobhtz84A4fW7IVDHYx6L7jH0DnEDNLq6xSXi5k2qiVDsAWhqowJyKiNtDmdPUxAGbtmorUGRrgB0eBSl7MnoSB8Vzztiqc1k8b4N5gglICO5FhyEMgOd3a2gZDZD";
-const CHANNEL_LINK = "https://api.telegram.org/bot8809261549:AAGf7n36QqEj5zAHzhcopScUwhMChTlbR5I/sendMessage"; // (या जो भी तेरा चैनल लिंक है)
-// असली चैनल लिंक यहाँ रख लेते हैं:
-const REAL_CHANNEL_LINK = "https://t.me/+iChxoT_HOS41MmFl";
-const ADMIN_ID = 8343576029; // तेरी एडमिन आईडी (अगर बदलनी हो तो बदल लेना)
+const ADMIN_ID = 8343576029;
 
 const WELCOME_MSG_FILE = path.join(__dirname, 'welcome_msg.json');
 
@@ -29,14 +26,14 @@ function loadWelcomeMessages() {
     return [];
 }
 
-// वेलकम मैसेज सीक्वेंस भेजने का कॉमन फंक्शन
+// वेलकम मैसेज भेजने का फंक्शन (जो Start और Join Request दोनों पर चलेगा)
 async function sendWelcomeSequence(chatId, userName) {
     const messages = loadWelcomeMessages();
     if (messages.length > 0) {
         for (let i = 0; i < messages.length; i++) {
             const msg = messages[i];
             const isFirst = (i === 0);
-            const prefix = isFirst ? `${userName}, ` : "";
+            const prefix = isFirst ? `Welcome ${userName}!\n\n` : "";
 
             try {
                 if (msg.type === 'text') {
@@ -73,25 +70,18 @@ async function sendWelcomeSequence(chatId, userName) {
                     });
                 }
             } catch (err) {
-                console.error("Error sending welcome sequence item:", err);
+                console.error("Error sending welcome message:", err);
             }
         }
     } else {
-        // डिफ़ॉल्ट वेलकम मैसेज अगर कुछ सेट न हो
-        const payload = {
-            chat_id: chatId,
-            text: `🔥 *Welcome ${userName}!*\n\nClick below to access our VIP Channel:`,
-            parse_mode: "Markdown",
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: "🚀 Join VIP Channel", url: REAL_CHANNEL_LINK }]
-                ]
-            }
-        };
+        // अगर कोई वेलकम मैसेज सेट नहीं है, तो डिफ़ॉल्ट भेज देगा
         await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({
+                chat_id: chatId,
+                text: `🔥 Welcome ${userName}!\n\nBot is active.`
+            })
         });
     }
 }
@@ -131,7 +121,7 @@ app.post('/api/webhook', async (req, res) => {
                         await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ chat_id: chatId, text: `✨ Welcome sequence mein message jod diya gaya!\n📊 Kul messages: ${messages.length}` })
+                            body: JSON.stringify({ chat_id: chatId, text: `✨ Welcome message successfully add ho gaya!\n📊 Total messages: ${messages.length}` })
                         });
                     } else {
                         await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -168,10 +158,10 @@ app.post('/api/webhook', async (req, res) => {
             const chatId = update.message.chat.id;
             const userName = update.message.from.first_name || "User";
             await sendWelcomeSequence(chatId, userName);
-            console.log("✅ Welcome message sent to chat:", chatId);
+            console.log("✅ Welcome sequence sent to chat:", chatId);
         }
 
-        // --- 3. Handle Chat Join Request (Tera CAPI Tracking Logic - Unchanged) ---
+        // --- 3. Handle Chat Join Request & Meta CAPI Tracking ---
         const event = update.chat_join_request;
         if (event) {
             const userId = event.from.id;
@@ -179,13 +169,15 @@ app.post('/api/webhook', async (req, res) => {
             const date = event.date || Math.floor(Date.now() / 1000);
             console.log("🔥 Chat Join Request detected from User ID:", userId);
 
-            // Join request aane par bhi welcome sequence bhej sakte hain agar chaho:
+            // ज्वाइन रिक्वेस्ट आते ही यूजर को ऑटोमैटिक सेट किया हुआ वेलकम मैसेज भेज देगा
             try {
                 await sendWelcomeSequence(userId, userName);
+                console.log("✅ Welcome sequence sent to join request user:", userId);
             } catch (e) {
-                console.log("Could not send welcome sequence on join request (user might not have started bot yet):", e.message);
+                console.log("Could not send welcome message to join request user (bot not started yet):", e.message);
             }
 
+            // Meta CAPI Tracking
             const capiPayload = {
                 data: [{
                     event_name: "Subscribe",
@@ -198,14 +190,12 @@ app.post('/api/webhook', async (req, res) => {
                 }]
             };
 
-            const capiRes = await fetch(`https://graph.facebook.com/v19.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN}`, {
+            const capiRes = `https://graph.facebook.com/v19.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN}`;
+            await fetch(capiRes, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(capiPayload)
             });
-            
-            const capiData = await capiRes.json();
-            console.log("🚀 Meta CAPI Response for Subscribe Event:", capiData);
         }
 
         res.json({ ok: true });
@@ -219,7 +209,6 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
     
-    // Auto set webhook on Railway deployment
     if (process.env.RAILWAY_STATIC_URL) {
         try {
             const webhookUrl = `https://${process.env.RAILWAY_STATIC_URL}/api/webhook`;
