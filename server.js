@@ -16,24 +16,22 @@ app.get('/', (req, res) => {
     res.send("Client Bot & CAPI Tracking Server is Running Perfectly!");
 });
 
-// Telegram Webhook Endpoint
 app.post('/api/webhook', async (req, res) => {
     try {
         const update = req.body;
+        console.log("📥 Incoming Update:", JSON.stringify(update));
         
         if (update.message && update.message.text) {
             const text = update.message.text;
             const chatId = update.message.chat.id;
 
-            // 👉 Yahan ab reply feature properly handle hoga
             if (text.startsWith('/setwelcome')) {
                 let newMessage = "";
 
-                // Agar tune kisi message par reply karke /setwelcome bheja hai
                 if (update.message.reply_to_message) {
-                    newMessage = update.message.reply_to_message.text || update.message.reply_to_message.caption || "";
+                    const rep = update.message.reply_to_message;
+                    newMessage = rep.text || rep.caption || "";
                 } else {
-                    // Agar direct /setwelcome ke aage likha hai
                     newMessage = text.replace('/setwelcome', '').trim();
                 }
 
@@ -44,7 +42,7 @@ app.post('/api/webhook', async (req, res) => {
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                             chat_id: chatId,
-                            text: "✅ *हो गया भाई! नया वेलकम मैसेज सेट हो गया है:* \n\n" + currentWelcomeMessage,
+                            text: "✅ *हो गया भाई! नया वेलकम मैसेज सेट हो गया है:*\n\n" + currentWelcomeMessage,
                             parse_mode: "Markdown"
                         })
                     });
@@ -54,7 +52,7 @@ app.post('/api/webhook', async (req, res) => {
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                             chat_id: chatId,
-                            text: "⚠️ भाई, जिस मैसेज को वेलकम बनाना है उसपर Reply करके `/setwelcome` भेज!",
+                            text: "⚠️ भाई, मैसेज पर Reply करके `/setwelcome` भेज या फिर `/setwelcome [तेरा मैसेज]` लिख!",
                             parse_mode: "Markdown"
                         })
                     });
@@ -67,38 +65,32 @@ app.post('/api/webhook', async (req, res) => {
                 if (textParts.length > 1) {
                     const param = textParts[1];
                     if (param.startsWith('fbclid_')) {
-                        const fbclidVal = param.replace('fbclid_', '');
-                        userClickMapping[chatId] = fbclidVal;
+                        userClickMapping[chatId] = param.replace('fbclid_', '');
                     }
                 }
                 return res.json({ ok: true });
             }
         }
 
-        // Chat Join Request par instant welcome message + CAPI fire
         const event = update.chat_join_request;
         if (event) {
             const userId = event.from.id;
             const chatId = event.chat.id;
             const date = event.date || Math.floor(Date.now() / 1000);
-
             const storedFbclid = userClickMapping[userId] || userClickMapping[chatId];
 
             try {
-                const welcomePayload = {
-                    chat_id: userId,
-                    text: currentWelcomeMessage,
-                    parse_mode: "Markdown",
-                    reply_markup: {
-                        inline_keyboard: [
-                            [{ text: "🚀 Join VIP Channel", url: CHANNEL_LINK }]
-                        ]
-                    }
-                };
                 await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(welcomePayload)
+                    body: JSON.stringify({
+                        chat_id: userId,
+                        text: currentWelcomeMessage,
+                        parse_mode: "Markdown",
+                        reply_markup: {
+                            inline_keyboard: [[{ text: "🚀 Join VIP Channel", url: CHANNEL_LINK }]]
+                        }
+                    })
                 });
             } catch (err) {
                 console.error("Error sending welcome message:", err);
@@ -112,20 +104,18 @@ app.post('/api/webhook', async (req, res) => {
                 userData.fbc = `fb.1.${Date.now()}.${storedFbclid}`;
             }
 
-            const capiPayload = {
-                data: [{
-                    event_name: "Subscribe",
-                    event_time: date,
-                    action_source: "system_generated",
-                    event_id: `sub_${userId}_${date}`,
-                    user_data: userData
-                }]
-            };
-
             await fetch(`https://graph.facebook.com/v19.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(capiPayload)
+                body: JSON.stringify({
+                    data: [{
+                        event_name: "Subscribe",
+                        event_time: date,
+                        action_source: "system_generated",
+                        event_id: `sub_${userId}_${date}`,
+                        user_data: userData
+                    }]
+                })
             });
         }
 
@@ -139,7 +129,6 @@ app.post('/api/webhook', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
-    
     if (process.env.RAILWAY_STATIC_URL) {
         try {
             const webhookUrl = `https://${process.env.RAILWAY_STATIC_URL}/api/webhook`;
