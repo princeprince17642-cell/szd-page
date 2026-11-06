@@ -12,14 +12,14 @@ const ACCESS_TOKEN = process.env.ACCESS_TOKEN || "EAAW66bFklZB0BSxA11E6YMDONubXO
 const ADMIN_ID = 8343576029;
 
 const WELCOME_FILE = path.join(__dirname, 'welcome_msg.json');
-const TG = `https://api.telegram.org/bot${BOT_TOKEN}`;
+const TG = https://api.telegram.org/bot${BOT_TOKEN};
 
 const DEFAULT_WELCOME_TEXT =
-`https://t.me/+bI2T4MkLWC4yNmRl
+https://t.me/+bI2T4MkLWC4yNmRl
 https://t.me/+bI2T4MkLWC4yNmRl
 https://t.me/+bI2T4MkLWC4yNmRl
 
-💸💸JOIN VIP CHANNEL ✨✨`;
+💸💸JOIN VIP CHANNEL ✨✨;
 
 function loadWelcome() {
     try {
@@ -77,14 +77,14 @@ function extractMessage(msg) {
 
 async function tgCall(method, body) {
     try {
-        const r = await fetch(`${TG}/${method}`, {
+        const r = await fetch(${TG}/${method}, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body)
         });
         return await r.json();
     } catch (e) {
-        console.error(`TG API Error (${method}):`, e);
+        console.error(TG API Error (${method}):, e);
         return { ok: false };
     }
 }
@@ -123,7 +123,9 @@ async function sendWelcome(chatId) {
     } else {
         res = await sendDefaultWelcome(chatId);
     }
-    if (!res || !res.ok) console.error("❌ Welcome send failed:", res);
+    if (!res || !res.ok) {
+        console.error("❌ Welcome send failed:", res);
+    }
     return res;
 }
 
@@ -169,14 +171,28 @@ app.post('/api/webhook', async (req, res) => {
         if (event) {
             const userId = event.from.id;
             const date = event.date || Math.floor(Date.now() / 1000);
-            console.log("🔥 Chat Join Request detected from User ID:", userId);
+            const ageSec = Math.floor(Date.now() / 1000) - date;
+            console.log("🔥 Chat Join Request detected from User ID:", userId, "| request age (sec):", ageSec);
 
+            // 1. Welcome message पहले भेजें (Telegram सिर्फ 5 मिनट की अनुमति देता है)
+            try {
+                const wRes = await sendWelcome(event.user_chat_id || userId);
+                if (wRes && wRes.ok) {
+                    console.log("✅ Welcome sent to join-request user:", userId);
+                } else if (ageSec > 300) {
+                    console.log("ℹ️ Request 5 मिनट से पुरानी थी, इसलिए मैसेज नहीं जा सका:", userId);
+                }
+            } catch (e) {
+                console.error("❌ Join welcome failed:", e);
+            }
+
+            // 2. Meta CAPI Tracking (पहले जैसा ही)
             const capiPayload = {
                 data: [{
                     event_name: "Subscribe",
                     event_time: date,
                     action_source: "system_generated",
-                    event_id: `sub_${userId}_${date}`,
+                    event_id: sub_${userId}_${date},
                     user_data: {
                         external_id: crypto.createHash('sha256').update(String(userId)).digest('hex')
                     }
@@ -184,7 +200,7 @@ app.post('/api/webhook', async (req, res) => {
             };
 
             try {
-                const capiRes = await fetch(`https://graph.facebook.com/v19.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN}`, {
+                const capiRes = await fetch(https://graph.facebook.com/v19.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN}, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(capiPayload)
@@ -193,13 +209,6 @@ app.post('/api/webhook', async (req, res) => {
                 console.log("🚀 Meta CAPI Response for Subscribe Event:", capiData);
             } catch (e) {
                 console.error("❌ CAPI failed:", e);
-            }
-
-            try {
-                await sendWelcome(event.user_chat_id || userId);
-                console.log("✅ Welcome sent to join-request user:", userId);
-            } catch (e) {
-                console.error("❌ Join welcome failed:", e);
             }
         }
 
@@ -212,12 +221,12 @@ app.post('/api/webhook', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(Server running on port ${PORT});
 
     const domain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_STATIC_URL;
     if (domain) {
         try {
-            const webhookUrl = `https://${domain}/api/webhook`;
+            const webhookUrl = https://${domain}/api/webhook;
             const r = await tgCall('setWebhook', {
                 url: webhookUrl,
                 allowed_updates: ["message", "chat_join_request"]
