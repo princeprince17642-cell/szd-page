@@ -6,17 +6,15 @@ const path = require('path');
 const app = express();
 app.use(express.json());
 
-// ⚠️ अपनी वैल्यू Railway के Variables में डालें (नीचे नोट देखें)
-const BOT_TOKEN = process.env.BOT_TOKEN || "YOUR_BOT_TOKEN";
-const PIXEL_ID = process.env.PIXEL_ID || "YOUR_PIXEL_ID";
-const ACCESS_TOKEN = process.env.ACCESS_TOKEN || "YOUR_META_ACCESS_TOKEN";
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const PIXEL_ID = process.env.PIXEL_ID;
+const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
 const CHANNEL_LINK = "https://t.me/+iChxoT_HOS41MmFl";
 const ADMIN_ID = 8343576029;
 
 const WELCOME_FILE = path.join(__dirname, 'welcome_msg.json');
 const TG = https://api.telegram.org/bot${BOT_TOKEN};
 
-// ---------- Welcome message helpers ----------
 function loadWelcome() {
     try {
         return JSON.parse(fs.readFileSync(WELCOME_FILE, 'utf8'));
@@ -78,10 +76,9 @@ async function sendSavedWelcome(chatId, w) {
         return tgCall('sendMessage', { chat_id: chatId, text: w.text, entities: w.entities });
     }
     const methodMap = { photo: 'sendPhoto', document: 'sendDocument', video: 'sendVideo' };
-    const fieldMap = { photo: 'photo', document: 'document', video: 'video' };
     return tgCall(methodMap[w.type], {
         chat_id: chatId,
-        [fieldMap[w.type]]: w.file_id,
+        [w.type]: w.file_id,
         caption: w.caption,
         caption_entities: w.caption_entities
     });
@@ -114,13 +111,11 @@ app.get('/', (req, res) => {
     res.send("Client Bot & CAPI Tracking Server is Running Perfectly!");
 });
 
-// Telegram Webhook Endpoint
 app.post('/api/webhook', async (req, res) => {
     try {
         const update = req.body;
         console.log("📥 Incoming Telegram Update:", JSON.stringify(update));
 
-        // ---------- Admin: /setwelcome (reply करके) ----------
         if (
             update.message &&
             update.message.text &&
@@ -144,15 +139,12 @@ app.post('/api/webhook', async (req, res) => {
                 }
             }
             await tgCall('sendMessage', { chat_id: chatId, text: reply });
-        }
-        // ---------- Handle /start command from user ----------
-        else if (update.message && update.message.text && update.message.text.startsWith('/start')) {
+        } else if (update.message && update.message.text && update.message.text.startsWith('/start')) {
             const chatId = update.message.chat.id;
             await sendWelcome(chatId);
             console.log("✅ Welcome message sent to chat:", chatId);
         }
 
-        // Handle Chat Join Request (Jab user request bhejega, tab Subscribe event fire hoga)
         const event = update.chat_join_request;
         if (event) {
             const userId = event.from.id;
@@ -180,7 +172,6 @@ app.post('/api/webhook', async (req, res) => {
             const capiData = await capiRes.json();
             console.log("🚀 Meta CAPI Response for Subscribe Event:", capiData);
 
-            // Custom welcome message भेजें (CAPI के बाद, ताकि ट्रैकिंग पर असर न पड़े)
             try {
                 await sendWelcome(event.user_chat_id || userId);
                 console.log("✅ Welcome sent to join-request user:", userId);
