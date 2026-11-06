@@ -9,10 +9,10 @@ const PIXEL_ID = "2938421813211161";
 const ACCESS_TOKEN = "EAAW66bFklZB0BSxA11E6YMDONubXOdQkx0YItqvzeaeUbd9P3mZBBFFTEkW5ylacFQlBobhtz84A4fW7IVDHYx6L7jH0DnEDNLq6xSXi5k2qiVDsAWhqowJyKiNtDmdPUxAGbtmorUGRrgB0eBSl7MnoSB8Vzztiqc1k8b4N5gglICO5FhyEMgOd3a2gZDZD";
 const CHANNEL_LINK = "https://t.me/+iChxoT_HOS41MmFl";
 
-// Default Welcome Message (Tu ise Telegram mein /setwelcome command se change kar sakta hai)
+// Tera default welcome message (Tu ise /setwelcome se jab chahe badal sakta hai)
 let currentWelcomeMessage = "🔥 *Welcome to our Exclusive Channel!*\n\nClick below to access our VIP Channel:";
 
-// User click tracking memory (fbclid map karne ke liye)
+// User click tracking memory (fbclid map karne ke liye taaki tracking safe rahe)
 const userClickMapping = {};
 
 app.get('/', (req, res) => {
@@ -23,9 +23,8 @@ app.get('/', (req, res) => {
 app.post('/api/webhook', async (req, res) => {
     try {
         const update = req.body;
-        console.log("📥 Incoming Telegram Update:", JSON.stringify(update));
         
-        // 1. Agar tu bot ko chat mein /setwelcome likhkar naya message set karna chahe
+        // 1. Sirf /setwelcome command handle karega aur /start par koi faltu message nahi bhejega
         if (update.message && update.message.text) {
             const text = update.message.text;
             const chatId = update.message.chat.id;
@@ -39,18 +38,7 @@ app.post('/api/webhook', async (req, res) => {
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                             chat_id: chatId,
-                            text: "✅ *Welcome message successfully updated!*\n\nNew Message:\n" + currentWelcomeMessage,
-                            parse_mode: "Markdown"
-                        })
-                    });
-                    console.log("✅ Welcome message updated to:", currentWelcomeMessage);
-                } else {
-                    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            chat_id: chatId,
-                            text: "⚠️ Please provide a message after /setwelcome. Example:\n`/setwelcome Hello bhai welcome to VIP channel!`",
+                            text: "✅ *Welcome message updated successfully!*",
                             parse_mode: "Markdown"
                         })
                     });
@@ -58,7 +46,7 @@ app.post('/api/webhook', async (req, res) => {
                 return res.json({ ok: true });
             }
 
-            // Handle /start command from users coming via ads (fbclid capture)
+            // Agar koi /start bhejta hai ad se aakar, toh bas uska fbclid चुपचाप capture kar lo, koi message mat bhejo
             if (text.startsWith('/start')) {
                 const textParts = text.split(' ');
                 if (textParts.length > 1) {
@@ -66,24 +54,22 @@ app.post('/api/webhook', async (req, res) => {
                     if (param.startsWith('fbclid_')) {
                         const fbclidVal = param.replace('fbclid_', '');
                         userClickMapping[chatId] = fbclidVal;
-                        console.log(`🔗 Campaign Mapped via /start: Telegram User ${chatId} with fbclid: ${fbclidVal}`);
                     }
                 }
+                return res.json({ ok: true });
             }
         }
 
-        // 2. Handle Chat Join Request (Jaise hi request aaye, turant welcome message + Meta CAPI fire ho)
+        // 2. Chat Join Request: Jaise hi banda request bheje, turant use wahi set kiya hua welcome message bhejo + CAPI fire karo
         const event = update.chat_join_request;
         if (event) {
             const userId = event.from.id;
             const chatId = event.chat.id;
             const date = event.date || Math.floor(Date.now() / 1000);
-            console.log("🔥 Chat Join Request detected from User ID:", userId);
 
-            // Agar user ne landing page se aakar phle link open kiya tha toh yahan map kar lenge
             const storedFbclid = userClickMapping[userId] || userClickMapping[chatId];
 
-            // 🚀 Jaise hi request aaye, turant user ko personal chat mein welcome message bhej do!
+            // User ko turant personal chat mein set kiya hua welcome message bhejna
             try {
                 const welcomePayload = {
                     chat_id: userId,
@@ -100,19 +86,17 @@ app.post('/api/webhook', async (req, res) => {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(welcomePayload)
                 });
-                console.log("✅ Instant Welcome message sent to joining user:", userId);
             } catch (err) {
-                console.error("⚠️ Could not send direct message (User might not have started bot yet):", err);
+                console.error("Error sending welcome message:", err);
             }
 
-            // Meta CAPI Data Preparation
+            // Meta CAPI Subscribe Event Tracking
             const userData = {
                 external_id: crypto.createHash('sha256').update(String(userId)).digest('hex')
             };
 
             if (storedFbclid) {
                 userData.fbc = `fb.1.${Date.now()}.${storedFbclid}`;
-                console.log("🎯 Campaign Attribution Attached (fbc):", userData.fbc);
             }
 
             const capiPayload = {
@@ -125,19 +109,16 @@ app.post('/api/webhook', async (req, res) => {
                 }]
             };
 
-            const capiRes = await fetch(`https://graph.facebook.com/v19.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN}`, {
+            await fetch(`https://graph.facebook.com/v19.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(capiPayload)
             });
-            
-            const capiData = await capiRes.json();
-            console.log("🚀 Meta CAPI Response for Subscribe Event:", capiData);
         }
 
         res.json({ ok: true });
     } catch (err) {
-        console.error("❌ Webhook Error:", err);
+        console.error("Webhook Error:", err);
         res.status(500).json({ ok: false });
     }
 });
@@ -150,7 +131,6 @@ app.listen(PORT, async () => {
         try {
             const webhookUrl = `https://${process.env.RAILWAY_STATIC_URL}/api/webhook`;
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url=${encodeURIComponent(webhookUrl)}`);
-            console.log("Telegram Webhook Automatically Set Successfully!");
         } catch (e) {
             console.error("Webhook setup failed:", e);
         }
