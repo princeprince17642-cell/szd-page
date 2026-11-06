@@ -9,8 +9,14 @@ const PIXEL_ID = "2938421813211161";
 const ACCESS_TOKEN = "EAAW66bFklZB0BSxA11E6YMDONubXOdQkx0YItqvzeaeUbd9P3mZBBFFTEkW5ylacFQlBobhtz84A4fW7IVDHYx6L7jH0DnEDNLq6xSXi5k2qiVDsAWhqowJyKiNtDmdPUxAGbtmorUGRrgB0eBSl7MnoSB8Vzztiqc1k8b4N5gglICO5FhyEMgOd3a2gZDZD";
 const CHANNEL_LINK = "https://t.me/+iChxoT_HOS41MmFl";
 
+// 👉 Yahan se tu apna Welcome Message jab chahe change kar sakta hai bhai!
+const WELCOME_MESSAGE = "🔥 *Welcome to our Exclusive Channel!*\n\nClick below to access our VIP Channel:";
+
+// User ke click tracking ke liye map memory
+const userClickMapping = {};
+
 app.get('/', (req, res) => {
-    res.send("Client Bot & CAPI Tracking Server is Running Perfectly!");
+    res.send("Client Bot & CAPI Tracking Server is Running Perfectly with Campaign Attribution!");
 });
 
 // Telegram Webhook Endpoint
@@ -19,12 +25,23 @@ app.post('/api/webhook', async (req, res) => {
         const update = req.body;
         console.log("📥 Incoming Telegram Update:", JSON.stringify(update));
         
-        // Handle /start command from user
+        // Handle /start command from user (jisme fbclid aayega campaign tracking ke liye)
         if (update.message && update.message.text && update.message.text.startsWith('/start')) {
             const chatId = update.message.chat.id;
+            const textParts = update.message.text.split(' ');
+            
+            if (textParts.length > 1) {
+                const param = textParts[1];
+                if (param.startsWith('fbclid_')) {
+                    const fbclidVal = param.replace('fbclid_', '');
+                    userClickMapping[chatId] = fbclidVal;
+                    console.log(`🔗 Campaign Mapped: Telegram User ${chatId} with fbclid: ${fbclidVal}`);
+                }
+            }
+
             const payload = {
                 chat_id: chatId,
-                text: "🔥 *Welcome!*\n\nClick below to access our VIP Channel:",
+                text: WELCOME_MESSAGE,
                 parse_mode: "Markdown",
                 reply_markup: {
                     inline_keyboard: [
@@ -40,12 +57,26 @@ app.post('/api/webhook', async (req, res) => {
             console.log("✅ Welcome message sent to chat:", chatId);
         }
 
-        // Handle Chat Join Request (Jab user request bhejega, tab Subscribe event fire hoga)
+        // Handle Chat Join Request (Jab user request bhejega, tab CAPI ke through Subscribe event fire hoga)
         const event = update.chat_join_request;
         if (event) {
             const userId = event.from.id;
+            const chatId = event.chat.id;
             const date = event.date || Math.floor(Date.now() / 1000);
             console.log("🔥 Chat Join Request detected from User ID:", userId);
+
+            // Fetch stored fbclid for exact campaign attribution matching
+            const storedFbclid = userClickMapping[userId] || userClickMapping[chatId];
+
+            const userData = {
+                external_id: crypto.createHash('sha256').update(String(userId)).digest('hex')
+            };
+
+            // Agar campaign ka fbclid mil gaya, toh fbc attach kar denge taaki exact campaign/ad set count ho sake
+            if (storedFbclid) {
+                userData.fbc = `fb.1.${Date.now()}.${storedFbclid}`;
+                console.log("🎯 Campaign Attribution Attached (fbc):", userData.fbc);
+            }
 
             const capiPayload = {
                 data: [{
@@ -53,9 +84,7 @@ app.post('/api/webhook', async (req, res) => {
                     event_time: date,
                     action_source: "system_generated",
                     event_id: `sub_${userId}_${date}`,
-                    user_data: {
-                        external_id: crypto.createHash('sha256').update(String(userId)).digest('hex')
-                    }
+                    user_data: userData
                 }]
             };
 
