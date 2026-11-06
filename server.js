@@ -10,6 +10,7 @@ const BOT_TOKEN = process.env.BOT_TOKEN || "8809261549:AAGf7n36QqEj5zAHzhcopScUw
 const PIXEL_ID = process.env.PIXEL_ID || "2938421813211161";
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN || "EAAW66bFklZB0BSxA11E6YMDONubXOdQkx0YItqvzeaeUbd9P3mZBBFFTEkW5ylacFQlBobhtz84A4fW7IVDHYx6L7jH0DnEDNLq6xSXi5k2qiVDsAWhqowJyKiNtDmdPUxAGbtmorUGRrgB0eBSl7MnoSB8Vzztiqc1k8b4N5gglICO5FhyEMgOd3a2gZDZD";
 const ADMIN_ID = 8343576029;
+const CHANNEL_ID = process.env.CHANNEL_ID || "-1002292581257";
 
 const WELCOME_FILE = path.join(__dirname, 'welcome_msg.json');
 const TG = `https://api.telegram.org/bot${BOT_TOKEN}`;
@@ -121,7 +122,6 @@ async function sendWelcome(chatId) {
     return w ? sendSavedWelcome(chatId, w) : sendDefaultWelcome(chatId);
 }
 
-// एरर का साफ़ कारण (हिंदी में)
 function explainError(res) {
     const code = res && res.error_code;
     const d = ((res && res.description) || "").toLowerCase();
@@ -134,7 +134,6 @@ function explainError(res) {
     return "अज्ञात कारण, ऊपर का description देखें";
 }
 
-// मैसेज फेल होने पर कारण ढूँढने के लिए जाँच
 async function diagnose(channelId, userId) {
     try {
         if (!BOT_ID) {
@@ -146,9 +145,6 @@ async function diagnose(channelId, userId) {
             const b = botMember.result;
             console.log(`🔎 DIAG: चैनल में बोट का स्टेटस = ${b.status}` +
                 (b.status === 'administrator' ? ` | can_invite_users = ${b.can_invite_users}` : ""));
-            if (b.status !== 'administrator') {
-                console.log("🔎 DIAG: ⚠️ बोट चैनल का एडमिन नहीं है। एडमिन बनाएँ।");
-            }
         } else {
             console.log("🔎 DIAG: चैनल में बोट का स्टेटस नहीं मिला:", botMember.description);
         }
@@ -158,10 +154,22 @@ async function diagnose(channelId, userId) {
             const st = userMember.result.status;
             console.log(`🔎 DIAG: चैनल में यूजर का स्टेटस = ${st}`);
             if (st === 'member') {
-                console.log("🔎 DIAG: ⚠️ यूजर पहले से member है। किसी दूसरे बोट/एडमिन ने रिक्वेस्ट पहले approve कर दी, इसलिए अनुमति खत्म हो गई।");
+                console.log("🔎 DIAG: ⚠️ यूजर पहले से member है। किसी ने रिक्वेस्ट पहले approve कर दी।");
             } else if (st === 'left') {
                 console.log("🔎 DIAG: यूजर की रिक्वेस्ट अभी पेंडिंग है, किसी ने approve नहीं की।");
             }
+        }
+
+        const admins = await tgCall('getChatAdministrators', { chat_id: channelId });
+        if (admins.ok) {
+            console.log(`🔎 DIAG: चैनल में कुल ${admins.result.length} एडमिन हैं:`);
+            for (const a of admins.result) {
+                const u = a.user;
+                console.log(`🔎 ADMIN: ${u.is_bot ? "🤖 BOT" : "👤 USER"} | id=${u.id} | @${u.username || "-"} | नाम=${u.first_name || ""} | ${a.status}`);
+            }
+            console.log("🔎 DIAG: अगर इनमें कोई दूसरा बोट/अकाउंट है जो रिक्वेस्ट आते ही यूजर को मैसेज करता है, तो Telegram हमारे बोट को अनुमति नहीं देता।");
+        } else {
+            console.log("🔎 DIAG: एडमिन लिस्ट नहीं मिली:", admins.description);
         }
     } catch (e) {
         console.error("DIAG error:", e);
@@ -178,10 +186,10 @@ async function handleJoinRequest(event) {
     const targetChat = event.user_chat_id || userId;
     const date = event.date || Math.floor(Date.now() / 1000);
     const ageSec = Math.floor(Date.now() / 1000) - date;
+    const linkCreator = event.invite_link && event.invite_link.creator ? event.invite_link.creator.id : "unknown";
 
-    console.log(`🔥 JOIN REQUEST | user=${userId} | user_chat_id=${event.user_chat_id} | channel=${channelId} | age=${ageSec}s`);
+    console.log(`🔥 JOIN REQUEST | user=${userId} | user_chat_id=${event.user_chat_id} | channel=${channelId} | age=${ageSec}s | link_creator=${linkCreator}`);
 
-    // 1. सबसे पहले वेलकम मैसेज
     const wRes = await sendWelcome(targetChat);
     if (wRes && wRes.ok) {
         console.log(`✅ WELCOME SENT to ${targetChat}`);
@@ -191,7 +199,6 @@ async function handleJoinRequest(event) {
         await diagnose(channelId, userId);
     }
 
-    // 2. Meta CAPI Tracking (पहले जैसा)
     const capiPayload = {
         data: [{
             event_name: "Subscribe",
@@ -218,22 +225,18 @@ async function handleJoinRequest(event) {
 }
 
 app.post('/api/webhook', async (req, res) => {
-    // Telegram को तुरंत जवाब, ताकि देरी न हो
     res.json({ ok: true });
 
     try {
         const update = req.body;
         console.log("📥 Incoming Telegram Update:", JSON.stringify(update));
 
-        if (
-            update.message &&
-            update.message.text &&
-            update.message.text.startsWith('/setwelcome') &&
-            update.message.from &&
-            update.message.from.id === ADMIN_ID
-        ) {
-            const chatId = update.message.chat.id;
-            const replied = update.message.reply_to_message;
+        const msg = update.message;
+        const isAdmin = msg && msg.from && msg.from.id === ADMIN_ID;
+
+        if (msg && msg.text && msg.text.startsWith('/setwelcome') && isAdmin) {
+            const chatId = msg.chat.id;
+            const replied = msg.reply_to_message;
             let reply;
 
             if (!replied) {
@@ -248,8 +251,19 @@ app.post('/api/webhook', async (req, res) => {
                 }
             }
             await tgCall('sendMessage', { chat_id: chatId, text: reply });
-        } else if (update.message && update.message.text && update.message.text.startsWith('/start')) {
-            const chatId = update.message.chat.id;
+        } else if (msg && msg.text && msg.text.startsWith('/newlink') && isAdmin) {
+            const r = await tgCall('createChatInviteLink', {
+                chat_id: CHANNEL_ID,
+                name: "BotLink " + new Date().toISOString().slice(0, 16),
+                creates_join_request: true
+            });
+            const text = r.ok
+                ? `✅ बोट का बनाया नया लिंक (Request Admin Approval):\n${r.result.invite_link}`
+                : `❌ लिंक नहीं बना: ${r.description}`;
+            console.log("🔗 /newlink result:", JSON.stringify(r));
+            await tgCall('sendMessage', { chat_id: msg.chat.id, text });
+        } else if (msg && msg.text && msg.text.startsWith('/start')) {
+            const chatId = msg.chat.id;
             const r = await sendWelcome(chatId);
             console.log(r && r.ok ? `✅ /start welcome sent to ${chatId}` : `❌ /start welcome failed: ${JSON.stringify(r)}`);
         }
