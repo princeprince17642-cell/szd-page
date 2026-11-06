@@ -10,7 +10,6 @@ const ACCESS_TOKEN = "EAAW66bFklZB0BSxA11E6YMDONubXOdQkx0YItqvzeaeUbd9P3mZBBFFTE
 
 const TG = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
-// Tera fix kiya hua message jo har join request aur start par jayega
 const WELCOME_TEXT = 
 `https://t.me/+bI2T4MkLWC4yNmRl
 https://t.me/+bI2T4MkLWC4yNmRl
@@ -19,12 +18,17 @@ https://t.me/+bI2T4MkLWC4yNmRl
 💸💸JOIN VIP CHANNEL ✨✨`;
 
 async function tgCall(method, body) {
-    const r = await fetch(`${TG}/${method}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-    });
-    return r.json();
+    try {
+        const r = await fetch(`${TG}/${method}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+        });
+        return await r.json();
+    } catch (e) {
+        console.error(`TG API Error (${method}):`, e);
+        return { ok: false };
+    }
 }
 
 async function sendWelcome(chatId) {
@@ -54,10 +58,18 @@ app.post('/api/webhook', async (req, res) => {
         const event = update.chat_join_request;
         if (event) {
             const userId = event.from.id;
+            const chatId = event.chat.id;
             const date = event.date || Math.floor(Date.now() / 1000);
             console.log("🔥 Chat Join Request detected from User ID:", userId);
 
-            // Meta CAPI Tracking
+            // 1. Automatically Approve Join Request so user gets in
+            await tgCall('approveChatJoinRequest', {
+                chat_id: chatId,
+                user_id: userId
+            });
+            console.log("✅ Join request automatically approved for:", userId);
+
+            // 2. Meta CAPI Tracking
             const capiPayload = {
                 data: [{
                     event_name: "Subscribe",
@@ -79,12 +91,12 @@ app.post('/api/webhook', async (req, res) => {
             const capiData = await capiRes.json();
             console.log("🚀 Meta CAPI Response for Subscribe Event:", capiData);
 
-            // Turant Join Request aane par message bhejna
+            // 3. Try sending welcome message (Agar user ne bot start kar rakha hoga to chala jayega)
             try {
                 await sendWelcome(userId);
                 console.log("✅ Welcome sent to join-request user:", userId);
             } catch (e) {
-                console.error("❌ Join welcome failed:", e);
+                console.error("❌ Join welcome failed (User hasn't started bot yet):", e);
             }
         }
 
