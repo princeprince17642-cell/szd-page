@@ -59,16 +59,8 @@ app.post('/api/webhook', async (req, res) => {
         const event = update.chat_join_request;
         if (event) {
             const userId = event.from.id;
-            const chatId = event.chat.id;
             const date = event.date || Math.floor(Date.now() / 1000);
             console.log("🔥 Chat Join Request detected from User ID:", userId);
-
-            // ऑटोमैटिक जॉइन रिक्वेस्ट अप्रूव करना
-            const approveRes = await tgCall('approveChatJoinRequest', {
-                chat_id: chatId,
-                user_id: userId
-            });
-            console.log("✅ Join Request Auto-Approved:", approveRes);
 
             // Meta CAPI Tracking
             const capiPayload = {
@@ -92,7 +84,7 @@ app.post('/api/webhook', async (req, res) => {
             const capiData = await capiRes.json();
             console.log("🚀 Meta CAPI Response for Subscribe Event:", capiData);
 
-            // यूजर को मैसेज भेजने की कोशिश (सेफ ट्राई-कैच के साथ)
+            // जॉइन रिक्वेस्ट आते ही सीधा वेलकम मैसेज भेजना
             try {
                 await sendWelcome(userId);
                 console.log("✅ Welcome message sent to join-request user:", userId);
